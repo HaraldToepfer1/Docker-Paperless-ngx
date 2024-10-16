@@ -1,0 +1,91 @@
+version: "2024-10-15"
+services:
+  broker:
+    image: docker.io/library/redis:7.4.1
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - paperless-redis:/data
+    networks:
+      - internal
+
+  db:
+    image: docker.io/library/postgres:16
+    container_name: paperless-postgres16
+    restart: unless-stopped
+    volumes:
+      - paperless-postgres16:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperlessdb
+      POSTGRES_USER: paperlessuser
+      POSTGRES_PASSWORD: strongpassword
+    networks:
+      - internal
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-webserver
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+      - tika
+      - gotenberg
+    ports:
+      - "8085:8000"
+    volumes:
+      - paperless-data:/usr/src/paperless/data
+      - paperless-media:/usr/src/paperless/media
+      - paperless-export:/usr/src/paperless/export
+      - paperless-consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DB: paperlessdb
+      PAPERLESS_DBUSER: paperlessuser
+      PAPERLESS_DBPASS: strongpassword
+      PAPERLESS_URL: http://paperless.homelabfs.de
+      PAPERLESS_TIME_ZONE: Europe/Berlin
+      PAPERLESS_OCR_LANGUAGE: deu
+      PAPERLESS_APP_TITLE: DMS Seewitz
+      PAPERLESS_FILENAME_FORMAT: "{created_year}/{created} - {correspondent} - {title}"
+      PAPERLESS_OCR_MODE: redo
+      PAPERLESS_OCR_CLEAN: clean
+      PUID: 1024
+      PGID: 100
+      USERMAP_UID: 1024
+      USERMAP_GID: 100
+      PAPERLESS_TIKA_ENABLED: 1
+#      PAPERLESS_TIKA_URL: http://tika:9998
+#      PAPERLESS_GOTENBERG_URL: http://gotenberg:3000
+    networks:
+      - internal
+
+  tika:
+    image: apache/tika:2.9.2.1-full
+    container_name: paperless-tika
+    restart: unless-stopped
+#    ports:
+#      - "9998:9998"
+    networks:
+      - internal
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+#    ports:
+#      - "3000:3000" # Port, auf dem Gotenberg läuft
+    networks:
+      - internal
+
+volumes:
+  paperless-redis:
+  paperless-postgres16:
+  paperless-data:
+  paperless-media:
+  paperless-export:
+  paperless-consume:
+
+networks:
+  internal:
+    driver: bridge
